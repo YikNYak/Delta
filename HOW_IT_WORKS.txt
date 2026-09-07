@@ -1,0 +1,69 @@
+Delta — How it works (moved from Delta.py)
+Made by @okaydrku — https://discord.com/users/920058671281602660 — 24.08.2026
+Original: Delta.py — now Delta
+
+How Delta works:
+---------------------------------------------
+1. Manifest Generator ():
+   - You enter AppID or search game name. Frontend calls:
+       GET /api/steam/search?q=<term>  (requires login)  -> list of AppIDs
+       GET /api/steam/details?appid=730 (public)         -> name, headerImage
+   - On "Download" the server merges sources (GitHub repos, archive.org, HTTPS folders)
+     for <appid>.lua + key.vdf + <appid>.json + <depot>_<manifest>.manifest
+     from upstreams: backend. It returns a ZIP with:
+       - <appid>.lua  -> addappid() / setManifestid() calls with depot keys
+       - <depot>_<gid>.manifest -> ACF manifest payload
+       - key.vdf / .json metadata
+   - You drop the .lua / .manifest into Delta watched folders.
+
+2. Desktop App (Delta v1.2.x):
+   - Electron + Delta fork. Detects Steam via registry.
+   - Manages "Library" (added AppIDs), handles .lua/.manifest/.zip drag-drop.
+   - "Fixes" tab: scrapes /fixes (1751 games) and per-game
+     /fixes/<appid> -> downloadable fix ZIPs (DRM bypass, online patches).
+
+3. Steam Plugin (Delta):
+   - DLLs injected into Steam: dwmapi.dll / xinput1_4.dll / Delta.dll
+   - Hooks steamclient64.dll + steamui.dll (patterns fetched from github okaydrku/steam-monitor)
+   - Hot-reloads .lua files from Steam/config/stplug-in/ (and optional extra lua paths)
+     Lua API (case-insensitive):
+       addappid(appid)  -> unlock base game + all DLCs
+       addappid(appid, 0, "hexKey") -> with depot decryption key
+       setManifestid(depotId, "gid" [, size])
+       addtoken(appid, "token"), setAppTicket(), setETicket(), setStat(), setlegacycdkey()
+   - Denuvo/SteamStub: forges AppTicket via ConfigStore vulnerability (88500005 after 30min -> refresh).
+   - Online Fix: add "-onlinefix" to launch options -> spoofs AppID 480 for lobby matchmaking.
+
+4. This script (Delta - Made by okaydrku):
+   - SEARCH: uses public Store API (store.steampowered.com/api/storesearch).
+   - ADD: creates <appid>.lua in Steam/config/stplug-in/ (same as Delta).
+     Real manifest download via 167.235.229.108/<appid> secretgoonpoon (backend) with decryption keys.
+     Fallback Delta-style lua with depots+DLCs if backend unavailable.
+   - FIX: downloads OnlineFix ZIP via /api/denuvo/download (auth 25/day) and extracts to game folder (per-file best-effort, handles PermissionError).
+   - FIXES: browse via /api/denuvo/listings + /api/denuvo/fixes?appid= (public)
+   - LIBRARY: scans stplug-in/*.lua like Delta Manage
+   - LAUNCH: edits Steam/userdata/*/config/localconfig.vdf LaunchOptions for -onlinefix (like LaunchOptionsViewModel)
+   - DLC: generates via /api/dlc/generate?appid=&base= (like GenerateDlcAsync)
+   - LOGIN: PKCE Discord OAuth http://localhost:53789/callback
+
+Usage:
+  pip install requests rich pyfiglet
+  python Delta.py                # interactive OGS TUI
+  python Delta.py search "elden ring"
+  python Delta.py add 1245620
+  python Delta.py add 590830
+  python Delta.py library
+  python Delta.py info 590830
+  python Delta.py fixes
+  python Delta.py fixes 590830
+  python Delta.py fix 590830
+  python Delta.py launch 590830
+  python Delta.py launch 590830 --remove
+  python Delta.py dlc 3977280 --base 410900
+  python Delta.py remove 590830
+  python Delta.py status
+  python Delta.py login
+  python Delta.py about
+
+Steam paths auto-detected via registry; override with --steam-path or STEAM_PATH env.
+Special thanks: Online-Fix, Public Resources (Steam API, SteamDB, api.steamcmd.net)
